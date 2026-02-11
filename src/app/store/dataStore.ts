@@ -1,7 +1,17 @@
 import { apiService, Employee as ApiEmployee, AttendanceRecord as ApiAttendanceRecord } from '../services/apiService';
+import { wakeUpService } from '../services/serviceWakeup';
 
 export interface Employee extends ApiEmployee {}
 export interface AttendanceRecord extends ApiAttendanceRecord {}
+
+// Service status tracking
+interface ServiceStatus {
+  isOnline: boolean;
+  isRetrying: boolean;
+  lastError?: string;
+  lastSuccessfulCall?: Date;
+  usingFallbackData: boolean;
+}
 
 // Global data store with API integration
 class DataStore {
@@ -9,6 +19,11 @@ class DataStore {
   private attendanceRecords: AttendanceRecord[] = [];
   private listeners: (() => void)[] = [];
   private isLoading = false;
+  private serviceStatus: ServiceStatus = {
+    isOnline: false,
+    isRetrying: false,
+    usingFallbackData: false
+  };
 
   constructor() {
     this.initializeData();
@@ -17,11 +32,23 @@ class DataStore {
   private async initializeData() {
     try {
       this.isLoading = true;
+      this.serviceStatus.isRetrying = true;
+      this.notifyListeners();
+
+      // Try to wake up service first if it's likely sleeping
+      try {
+        await wakeUpService();
+      } catch (error) {
+        console.log('Service wake-up attempt completed, proceeding with data load...');
+      }
       
       // Load employees from API
       const employeesResponse = await apiService.getEmployees();
       if (employeesResponse.success && employeesResponse.data) {
         this.employees = employeesResponse.data;
+        this.serviceStatus.isOnline = true;
+        this.serviceStatus.lastSuccessfulCall = new Date();
+        this.serviceStatus.usingFallbackData = false;
       }
 
       // Load today's attendance from API
@@ -31,16 +58,66 @@ class DataStore {
       }
 
       this.isLoading = false;
+      this.serviceStatus.isRetrying = false;
       this.notifyListeners();
     } catch (error) {
-      // Silently fail to API and use fallback data
-      console.warn('API unavailable, using fallback data:', error.message);
+      // Handle API failure gracefully
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('API unavailable, using fallback data:', errorMessage);
+      
       this.isLoading = false;
+      this.serviceStatus.isRetrying = false;
+      this.serviceStatus.isOnline = false;
+      this.serviceStatus.lastError = errorMessage;
+      this.serviceStatus.usingFallbackData = true;
       
       // Fallback to local data if API fails
       this.initializeFallbackData();
       this.notifyListeners();
     }
+  }
+
+  // Retry connection to API
+  public async retryConnection(): Promise<boolean> {
+    try {
+      this.serviceStatus.isRetrying = true;
+      this.notifyListeners();
+      
+      console.log('🔄 Retrying connection to backend service...');
+      
+      // Try to wake up the service
+      await wakeUpService();
+      
+      // Test with a simple API call
+      const response = await apiService.getEmployees();
+      
+      if (response.success) {
+        console.log('✅ Successfully reconnected to backend service!');
+        this.serviceStatus.isOnline = true;
+        this.serviceStatus.lastSuccessfulCall = new Date();
+        this.serviceStatus.lastError = undefined;
+        this.serviceStatus.usingFallbackData = false;
+        
+        // Reload data from API
+        await this.initializeData();
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.serviceStatus.lastError = errorMessage;
+      console.error('❌ Retry connection failed:', errorMessage);
+      return false;
+    } finally {
+      this.serviceStatus.isRetrying = false;
+      this.notifyListeners();
+    }
+  }
+
+  // Get current service status
+  public getServiceStatus(): ServiceStatus {
+    return { ...this.serviceStatus };
   }
 
   private initializeFallbackData() {
@@ -125,17 +202,44 @@ class DataStore {
 
   async deleteEmployee(id: string): Promise<void> {
     try {
+      // If service is offline, just delete locally
+      if (!this.serviceStatus.isOnline || this.serviceStatus.usingFallbackData) {
+        console.warn('🔌 Backend service is offline. Deleting employee locally only.');
+        this.employees = this.employees.filter(emp => emp._id !== id && emp.id !== id);
+        this.attendanceRecords = this.attendanceRecords.filter(att => att.employeeId !== id);
+        this.notifyListeners();
+        
+        // Show warning to user that deletion is local only
+        const employeeName = this.employees.find(emp => emp._id === id || emp.id === id)?.name || 'Employee';
+        throw new Error(`${employeeName} deleted locally. Changes will sync when backend service is available.`);
+      }
+
       const response = await apiService.deleteEmployee(id);
       if (response.success) {
         this.employees = this.employees.filter(emp => emp._id !== id && emp.id !== id);
         this.attendanceRecords = this.attendanceRecords.filter(att => att.employeeId !== id);
+        this.serviceStatus.lastSuccessfulCall = new Date();
+        this.serviceStatus.isOnline = true;
         this.notifyListeners();
       } else {
         throw new Error(response.message || 'Failed to delete employee');
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Check if this is a service availability error
+      if (errorMessage.includes('502') || errorMessage.includes('Bad Gateway') || errorMessage.includes('unavailable')) {
+        this.serviceStatus.isOnline = false;
+        this.serviceStatus.lastError = errorMessage;
+        
+        // Try to wake up service for next time
+        wakeUpService().catch(console.error);
+        
+        throw new Error('Backend service is currently unavailable. Please wait a moment and try again, or contact support if the issue persists.');
+      }
+      
       console.error('Failed to delete employee:', error);
-      throw error;
+      throw new Error(errorMessage);
     }
   }
 

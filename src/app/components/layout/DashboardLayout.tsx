@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import { ServiceStatus } from '../ServiceStatus';
 
 const pageNames: Record<string, string> = {
   '/': 'Dashboard',
@@ -38,6 +39,7 @@ export default function DashboardLayout() {
         <Navbar pageTitle={pageTitle} />
 
         <main className="p-8">
+          <ServiceStatus className="mb-6" />
           <Outlet />
         </main>
       </motion.div>

@@ -1,4 +1,13 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:5001/api';
+
+// Wake-up delay for free Render services (can take up to 50 seconds)
+const RENDER_WAKEUP_DELAY = 5000; // 5 seconds
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [5000, 10000, 15000]; // Progressive delays
+
+// Service status tracker
+let isServiceWaking = false;
+let lastWakeupAttempt = 0;
 
 // API response interface
 interface ApiResponse<T> {
@@ -20,6 +29,44 @@ interface ApiResponse<T> {
 }
 
 class ApiService {
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async wakeUpService(): Promise<void> {
+    const now = Date.now();
+    if (isServiceWaking || (now - lastWakeupAttempt < 60000)) {
+      // Don't spam wake-up requests
+      return;
+    }
+
+    isServiceWaking = true;
+    lastWakeupAttempt = now;
+
+    try {
+      console.log('🔄 Attempting to wake up backend service...');
+      
+      // Try to ping the health endpoint to wake up the service
+      const healthUrl = API_BASE_URL.replace('/api', '') + '/health';
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      if (response.ok) {
+        console.log('✅ Backend service is awake!');
+      } else {
+        console.log('⏳ Backend service is starting up...');
+      }
+    } catch (error) {
+      console.log('⏳ Backend service is starting up (connection failed as expected)...');
+    } finally {
+      isServiceWaking = false;
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -34,19 +81,70 @@ class ApiService {
       ...options,
     };
 
-    try {
-      const response = await fetch(url, config);
-      const data = await response.json();
+    let lastError: Error | null = null;
 
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await fetch(url, config);
+        
+        // Check for 502 Bad Gateway (sleeping Render service)
+        if (response.status === 502) {
+          if (attempt === 0) {
+            console.log('🚫 Backend service appears to be sleeping (502 Bad Gateway)');
+            await this.wakeUpService();
+            console.log(`⏳ Waiting ${RETRY_DELAYS[0]/1000}s for service to wake up...`);
+          }
+          
+          if (attempt < MAX_RETRIES) {
+            await this.sleep(RETRY_DELAYS[attempt]);
+            console.log(`🔄 Retry attempt ${attempt + 1}/${MAX_RETRIES}...`);
+            continue;
+          }
+          
+          throw new Error('Backend service is currently unavailable. Free tier services on Render may take up to 50 seconds to wake up from sleep mode.');
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        }
+
+        // Reset wake-up tracking on successful response
+        if (attempt > 0) {
+          console.log('✅ Backend service is now responding!');
+        }
+
+        return data;
+      } catch (error) {
+        lastError = error as Error;
+        
+        // For network errors or 502s, try to wake up the service and retry
+        if (attempt === 0 && (
+          lastError.message.includes('Failed to fetch') ||
+          lastError.message.includes('502') ||
+          lastError.message.includes('Bad Gateway')
+        )) {
+          await this.wakeUpService();
+          console.log(`⏳ Waiting ${RETRY_DELAYS[0]/1000}s for service to wake up...`);
+        }
+        
+        if (attempt < MAX_RETRIES) {
+          await this.sleep(RETRY_DELAYS[attempt]);
+          console.log(`🔄 Retry attempt ${attempt + 1}/${MAX_RETRIES}...`);
+          continue;
+        }
+        
+        console.error(`API Error (${endpoint}):`, lastError);
       }
-
-      return data;
-    } catch (error) {
-      console.error(`API Error (${endpoint}):`, error);
-      throw error;
     }
+
+    // If all retries failed, throw the last error with helpful context
+    const errorMessage = lastError?.message.includes('502') || lastError?.message.includes('Bad Gateway')
+      ? 'Backend service is currently unavailable. This is likely because the free Render service is sleeping. Please wait 30-60 seconds and try again.'
+      : lastError?.message || 'Unknown error occurred';
+    
+    throw new Error(errorMessage);
   }
 
   // Employee API methods
