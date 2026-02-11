@@ -33,7 +33,8 @@ class DataStore {
       this.isLoading = false;
       this.notifyListeners();
     } catch (error) {
-      console.error('Failed to initialize data:', error);
+      // Silently fail to API and use fallback data
+      console.warn('API unavailable, using fallback data:', error.message);
       this.isLoading = false;
       
       // Fallback to local data if API fails
@@ -146,7 +147,8 @@ class DataStore {
         this.notifyListeners();
       }
     } catch (error) {
-      console.error('Failed to refresh employees:', error);
+      console.warn('Failed to refresh employees from API, keeping current data:', error.message);
+      // Don't throw error, just keep existing data
     }
   }
 
@@ -200,7 +202,8 @@ class DataStore {
         this.notifyListeners();
       }
     } catch (error) {
-      console.error('Failed to refresh attendance:', error);
+      console.warn('Failed to refresh attendance from API, keeping current data:', error.message);
+      // Don't throw error, just keep existing data
     }
   }
 
