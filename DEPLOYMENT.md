@@ -4,8 +4,22 @@
 
 This guide covers deploying the HRMS Lite Admin Dashboard to production using popular cloud services.
 
-### Architecture
-- **Frontend**: React + TypeScript + Tailwind CSS
+### Ar**Note**: Option A (Vercel) or Option B (Render Static Site) are recommended as they're more efficient for serving static files.
+
+### Step 3: Update Backend CORS
+
+After deploying the frontend with any option above:
+
+1. Go back to Render dashboard (backend service)
+2. Update `FRONTEND_URL` environment variable with your frontend URL:
+   - Vercel: `https://your-app.vercel.app`
+   - Render Static Site: `https://your-frontend.onrender.com`
+   - Render Web Service: `https://your-frontend.onrender.com`
+3. Redeploy the backend service
+
+---
+
+## 🚀 Alternative Deployment Options- **Frontend**: React + TypeScript + Tailwind CSS
 - **Backend**: Node.js + Express + MongoDB
 - **Database**: MongoDB Atlas (Cloud)
 
@@ -97,9 +111,13 @@ curl https://your-backend-url.onrender.com/api/employees
 
 ---
 
-## 🌐 Frontend Deployment (Vercel)
+## 🌐 Frontend Deployment
 
-### Step 1: Prepare Frontend for Deployment
+You have two options for deploying the frontend:
+
+### Option A: Deploy to Vercel (Recommended)
+
+#### Step 1: Prepare Frontend for Deployment
 
 1. **Update API URL** in `.env.production`:
    ```env
@@ -108,26 +126,9 @@ curl https://your-backend-url.onrender.com/api/employees
    VITE_NODE_ENV=production
    ```
 
-2. **Create vercel.json**:
-   ```json
-   {
-     "rewrites": [
-       { "source": "/(.*)", "destination": "/index.html" }
-     ],
-     "headers": [
-       {
-         "source": "/api/(.*)",
-         "headers": [
-           { "key": "Access-Control-Allow-Origin", "value": "*" },
-           { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-           { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
-         ]
-       }
-     ]
-   }
-   ```
+2. **vercel.json is already configured** in the project root.
 
-### Step 2: Deploy to Vercel
+#### Step 2: Deploy to Vercel
 
 1. Go to [Vercel](https://vercel.com) and sign up
 2. Connect your GitHub account
@@ -141,6 +142,45 @@ curl https://your-backend-url.onrender.com/api/employees
    - `VITE_API_URL`: Your backend URL from Render
    - `VITE_APP_TITLE`: `HRMS Lite Admin Dashboard`
    - `VITE_NODE_ENV`: `production`
+
+### Option B: Deploy to Render Static Site
+
+If you prefer to keep everything on Render:
+
+#### Step 1: Create a New Static Site on Render
+
+1. Go to [Render Dashboard](https://dashboard.render.com)
+2. Click "New" → "Static Site"
+3. Connect your GitHub repository
+4. Configure:
+   - **Name**: `hrms-lite-frontend`
+   - **Branch**: `main`
+   - **Root Directory**: `/` (leave empty)
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `dist`
+
+#### Step 2: Add Environment Variables
+
+1. In the Render dashboard, go to Environment
+2. Add variables:
+   - `VITE_API_URL`: Your backend URL from Render
+   - `VITE_APP_TITLE`: `HRMS Lite Admin Dashboard`
+   - `VITE_NODE_ENV`: `production`
+
+### Option C: Deploy Frontend as Node.js App on Render (Current Issue Fix)
+
+If you want to deploy as a Node.js service (less efficient but works):
+
+1. Your `package.json` now includes a `start` script that serves the built files
+2. On Render, create a "Web Service" (not Static Site)
+3. Configure:
+   - **Name**: `hrms-lite-frontend`
+   - **Environment**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+4. Add environment variables as above
+
+**Note**: Option A (Vercel) or Option B (Render Static Site) are recommended as they're more efficient for serving static files.
 
 ### Step 3: Update Backend CORS
 
@@ -263,6 +303,13 @@ curl https://your-backend-url/api/attendance/today
 ## 🐛 Troubleshooting
 
 ### Common Issues
+
+#### Frontend: "Command start not found" Error (Render)
+**Problem**: Render trying to run `yarn start` on a Vite project  
+**Solution**: 
+1. Use Option B (Render Static Site) instead of Web Service
+2. Or ensure your `package.json` has the `start` script (already fixed)
+3. Or deploy to Vercel instead
 
 #### Backend Won't Start
 - Check environment variables are set correctly
