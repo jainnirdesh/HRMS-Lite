@@ -106,7 +106,7 @@ After deploying the frontend with any option above:
 
 After deployment, test your API:
 ```bash
-curl https://your-backend-url.onrender.com/api/employees
+curl https://hrms-lite-yygs.onrender.com/api/employees
 ```
 
 ---

@@ -35,7 +35,7 @@ const attendanceSchema = new mongoose.Schema({
 // Compound index to ensure one attendance record per employee per day
 attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
-// Index for better query performance
+// Additional indexes for better query performance  
 attendanceSchema.index({ date: -1 });
 attendanceSchema.index({ status: 1 });
 

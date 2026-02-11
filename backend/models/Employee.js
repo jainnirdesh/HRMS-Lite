@@ -60,8 +60,7 @@ employeeSchema.pre('save', async function(next) {
 });
 
 // Index for better query performance
-employeeSchema.index({ employeeId: 1 });
-employeeSchema.index({ email: 1 });
+// Note: unique indexes are automatically created for unique fields
 employeeSchema.index({ department: 1 });
 
 export default mongoose.model('Employee', employeeSchema);
