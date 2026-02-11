@@ -3,7 +3,7 @@ const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:
 // Wake-up delay for free Render services (can take up to 50 seconds)
 const RENDER_WAKEUP_DELAY = 5000; // 5 seconds
 const MAX_RETRIES = 3;
-const RETRY_DELAYS = [5000, 10000, 15000]; // Progressive delays
+const RETRY_DELAYS = [3000, 7000, 12000]; // Faster progressive delays: 3s, 7s, 12s
 
 // Service status tracker
 let isServiceWaking = false;

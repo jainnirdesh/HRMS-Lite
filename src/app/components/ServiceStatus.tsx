@@ -38,7 +38,7 @@ export function ServiceStatus({ className = '' }: ServiceStatusProps) {
   };
 
   const startCountdown = () => {
-    setCountdown(30);
+    setCountdown(20); // Reduced from 30 to 20 seconds
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -95,7 +95,7 @@ export function ServiceStatus({ className = '' }: ServiceStatusProps) {
           title: 'Service Starting',
           description: countdown > 0 
             ? `Backend service is waking up... Estimated time: ${countdown}s`
-            : 'Backend service is starting up. This may take up to 60 seconds for free tier services.',
+            : 'Backend service is starting up. Free tier services typically take 10-30 seconds to wake up.',
           className: 'border-yellow-200 bg-yellow-50 text-yellow-800'
         };
       
@@ -158,15 +158,14 @@ export function ServiceStatus({ className = '' }: ServiceStatusProps) {
             </div>
           )}
           
-          {status === 'waking' && countdown > 0 && (
-            <div className="mt-2">
-              <div className="w-full bg-yellow-200 rounded-full h-2">
-                <div 
-                  className="bg-yellow-600 h-2 rounded-full transition-all duration-1000"
-                  style={{ width: `${((30 - countdown) / 30) * 100}%` }}
-                />
+          {status === 'waking' && countdown > 0 && (              <div className="mt-2">
+                <div className="w-full bg-yellow-200 rounded-full h-2">
+                  <div 
+                    className="bg-yellow-600 h-2 rounded-full transition-all duration-1000"
+                    style={{ width: `${((20 - countdown) / 20) * 100}%` }}
+                  />
+                </div>
               </div>
-            </div>
           )}
         </div>
       </div>
