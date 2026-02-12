@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from './ui/alert';
-import { AlertCircle, CheckCircle2, Clock, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, RefreshCw, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { dataStore } from '../store/dataStore';
+import { debugCORS, clearBrowserCache } from '../services/corsDebug';
 
 interface ServiceStatusProps {
   className?: string;
@@ -53,12 +54,24 @@ export function ServiceStatus({ className = '' }: ServiceStatusProps) {
 
   const handleRetry = async () => {
     setIsRetrying(true);
+    
+    // Debug CORS if we're having issues
+    if (status === 'offline') {
+      const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:5001/api';
+      await debugCORS(API_BASE_URL + '/employees');
+    }
+    
     const success = await dataStore.retryConnection();
     setIsRetrying(false);
     
     if (success) {
       setStatus('online');
     }
+  };
+
+  const handleClearCache = () => {
+    console.log('🗑️ Clearing browser cache and reloading...');
+    clearBrowserCache();
   };
 
   useEffect(() => {
@@ -154,6 +167,16 @@ export function ServiceStatus({ className = '' }: ServiceStatusProps) {
                   <RefreshCw className="h-4 w-4 animate-spin mr-2" />
                 ) : null}
                 {isRetrying ? 'Retrying...' : 'Retry Now'}
+              </Button>
+              
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleClearCache}
+                className="h-8"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Clear Cache
               </Button>
             </div>
           )}

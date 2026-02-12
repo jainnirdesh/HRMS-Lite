@@ -46,22 +46,43 @@ class ApiService {
     try {
       console.log('🔄 Attempting to wake up backend service...');
       
-      // Try to ping the health endpoint to wake up the service
+      // Try multiple endpoints to ensure service is fully awake
       const healthUrl = API_BASE_URL.replace('/api', '') + '/health';
-      const response = await fetch(healthUrl, {
+      const cacheBreaker = `?_t=${Date.now()}`;
+      
+      // First try the health endpoint with cache busting
+      const response = await fetch(healthUrl + cacheBreaker, {
         method: 'GET',
         headers: {
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
         },
       });
 
       if (response.ok) {
         console.log('✅ Backend service is awake!');
+        
+        // Also try a simple API call to ensure CORS is working
+        try {
+          const apiResponse = await fetch(API_BASE_URL + '/employees' + cacheBreaker, {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Content-Type': 'application/json',
+            },
+          });
+          if (apiResponse.ok) {
+            console.log('✅ API endpoints are also responding!');
+          }
+        } catch (apiError) {
+          console.log('⚠️ Health endpoint works but API might need more time...');
+        }
       } else {
         console.log('⏳ Backend service is starting up...');
       }
     } catch (error) {
-      console.log('⏳ Backend service is starting up (connection failed as expected)...');
+      console.log('⏳ Backend service is starting up (connection error as expected)...');
     } finally {
       isServiceWaking = false;
     }
@@ -73,9 +94,16 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
     
+    // Add cache-busting for CORS-sensitive requests
+    const separator = url.includes('?') ? '&' : '?';
+    const cacheBreaker = `${separator}_cb=${Date.now()}`;
+    const finalUrl = `${url}${cacheBreaker}`;
+    
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
         ...options.headers,
       },
       ...options,
@@ -85,7 +113,7 @@ class ApiService {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await fetch(url, config);
+        const response = await fetch(finalUrl, config);
         
         // Check for 502 Bad Gateway (sleeping Render service) or 500 (CORS/server errors)
         if (response.status === 502 || response.status === 500) {

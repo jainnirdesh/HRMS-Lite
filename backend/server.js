@@ -59,10 +59,24 @@ const corsOptions = {
       'https://localhost:5175',
       'https://localhost:5176',
       'https://localhost:3000',
-      'https://hrms-lite.vercel.app'
+      'https://hrms-lite.vercel.app',
+      'https://hrms-lite-phi-seven.vercel.app',
+      'https://hrms-lite-*.vercel.app', // Allow any Vercel subdomain
+      // Add Render frontend deployment if exists
+      'https://hrms-lite-frontend.onrender.com',
+      'https://hrms-lite.onrender.com'
     ].filter(Boolean);
 
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+    // Check exact match first
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    }
+    // Check wildcard patterns for Vercel
+    else if (origin.includes('hrms-lite') && origin.includes('vercel.app')) {
+      callback(null, true);
+    }
+    // Allow in development
+    else if (process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
@@ -72,7 +86,7 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control', 'Pragma'],
   exposedHeaders: ['X-Total-Count']
 };
 
