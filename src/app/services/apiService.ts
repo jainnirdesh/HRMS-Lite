@@ -87,12 +87,14 @@ class ApiService {
       try {
         const response = await fetch(url, config);
         
-        // Check for 502 Bad Gateway (sleeping Render service)
-        if (response.status === 502) {
+        // Check for 502 Bad Gateway (sleeping Render service) or 500 (CORS/server errors)
+        if (response.status === 502 || response.status === 500) {
+          const errorType = response.status === 502 ? 'sleeping service' : 'server/CORS error';
+          
           if (attempt === 0) {
-            console.log('🚫 Backend service appears to be sleeping (502 Bad Gateway)');
+            console.log(`🚫 Backend service appears to have ${errorType} (${response.status})`);
             await this.wakeUpService();
-            console.log(`⏳ Waiting ${RETRY_DELAYS[0]/1000}s for service to wake up...`);
+            console.log(`⏳ Waiting ${RETRY_DELAYS[0]/1000}s for service to recover...`);
           }
           
           if (attempt < MAX_RETRIES) {
@@ -101,7 +103,7 @@ class ApiService {
             continue;
           }
           
-          throw new Error('Backend service is currently unavailable. Free tier services on Render may take up to 50 seconds to wake up from sleep mode.');
+          throw new Error(`Backend service is currently unavailable (${response.status}). Free tier services may need time to start up and configure properly.`);
         }
 
         const data = await response.json();
@@ -119,14 +121,33 @@ class ApiService {
       } catch (error) {
         lastError = error as Error;
         
-        // For network errors or 502s, try to wake up the service and retry
+        // Special handling for CORS preflight failures
+        if (lastError.message.includes('access control checks') || 
+            lastError.message.includes('Preflight response is not successful')) {
+          console.log(`🔧 CORS preflight failed (attempt ${attempt + 1}), likely due to backend deployment/configuration`);
+          
+          if (attempt === 0) {
+            await this.wakeUpService();
+          }
+          
+          if (attempt < MAX_RETRIES) {
+            // Longer delays for CORS issues as they may need backend restart
+            await this.sleep(RETRY_DELAYS[attempt] * 1.5);
+            console.log(`🔄 Retry attempt ${attempt + 1}/${MAX_RETRIES} (CORS configuration issue)...`);
+            continue;
+          }
+        }
+        
+        // For network errors, 502s, or 500s, try to wake up the service and retry
         if (attempt === 0 && (
           lastError.message.includes('Failed to fetch') ||
           lastError.message.includes('502') ||
-          lastError.message.includes('Bad Gateway')
+          lastError.message.includes('500') ||
+          lastError.message.includes('Bad Gateway') ||
+          lastError.message.includes('access control checks')
         )) {
           await this.wakeUpService();
-          console.log(`⏳ Waiting ${RETRY_DELAYS[0]/1000}s for service to wake up...`);
+          console.log(`⏳ Waiting ${RETRY_DELAYS[0]/1000}s for service to recover...`);
         }
         
         if (attempt < MAX_RETRIES) {
@@ -140,8 +161,10 @@ class ApiService {
     }
 
     // If all retries failed, throw the last error with helpful context
-    const errorMessage = lastError?.message.includes('502') || lastError?.message.includes('Bad Gateway')
+    const errorMessage = (lastError?.message.includes('502') || lastError?.message.includes('Bad Gateway'))
       ? 'Backend service is currently unavailable. This is likely because the free Render service is sleeping. Please wait 30-60 seconds and try again.'
+      : (lastError?.message.includes('500') || lastError?.message.includes('access control'))
+      ? 'Backend service is experiencing CORS configuration issues. The backend deployment may need to complete. Please wait 2-5 minutes and try again.'
       : lastError?.message || 'Unknown error occurred';
     
     throw new Error(errorMessage);
