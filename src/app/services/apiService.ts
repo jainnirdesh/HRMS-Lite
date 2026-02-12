@@ -94,10 +94,13 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
     
-    // Add cache-busting for CORS-sensitive requests
-    const separator = url.includes('?') ? '&' : '?';
-    const cacheBreaker = `${separator}_cb=${Date.now()}`;
-    const finalUrl = `${url}${cacheBreaker}`;
+    // Only add cache-busting for GET requests to avoid interfering with POST validation
+    let finalUrl = url;
+    if (!options.method || options.method === 'GET') {
+      const separator = url.includes('?') ? '&' : '?';
+      const cacheBreaker = `${separator}_cb=${Date.now()}`;
+      finalUrl = `${url}${cacheBreaker}`;
+    }
     
     const config: RequestInit = {
       headers: {

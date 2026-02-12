@@ -29,7 +29,21 @@ export default function EmployeeModal({ isOpen, onClose, onSave }: EmployeeModal
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ employeeId, name, email, department });
+    
+    // Create employee object, excluding empty employeeId
+    const employeeData: any = {
+      name,
+      email,
+      department,
+    };
+    
+    // Only include employeeId if it's not empty
+    if (employeeId.trim()) {
+      employeeData.employeeId = employeeId;
+    }
+    
+    onSave(employeeData);
+    
     // Reset form
     setEmployeeId('');
     setName('');

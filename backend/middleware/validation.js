@@ -20,7 +20,7 @@ export const handleValidationErrors = (req, res, next) => {
 // Employee validation rules
 export const validateEmployee = [
   body('employeeId')
-    .optional()
+    .optional({ values: 'falsy' }) // Treat empty strings as undefined
     .trim()
     .matches(/^EMP\d{3,}$/)
     .withMessage('Employee ID must be in format EMP001, EMP002, etc.'),
